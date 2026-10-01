@@ -14,7 +14,7 @@ DATA_FILE = os.path.join(
 
 MODEL_FILE = os.path.join(
     BASE_DIR,
-    "disease_model.joblib"
+    "best disease_model.pkl"
 )
 
 NUM = [
