@@ -1,3 +1,4 @@
+```python
 import os
 import joblib
 import matplotlib.pyplot as plt
@@ -5,123 +6,624 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-DATA_FILE = "Disease_Prediction_Health_Dataset.xlsx"
-MODEL_FILE = "disease_model.joblib"
-NUM = ["Age", "BMI", "Blood_Pressure_mmHg", "Cholesterol_mg_dL", "Glucose_mg_dL", "Heart_Rate_bpm"]
-COLS = ["Age", "Gender", "BMI", "Blood_Pressure_mmHg", "Cholesterol_mg_dL",
-        "Glucose_mg_dL", "Heart_Rate_bpm", "Smoking", "Exercise_Level"]
-FEATURE_ORDER = NUM + ["Gender", "Smoking", "Exercise_Level"]
-LABELS = {"Age": "Age", "BMI": "BMI", "Blood_Pressure_mmHg": "Blood pressure", "Cholesterol_mg_dL": "Cholesterol",
-          "Glucose_mg_dL": "Glucose", "Heart_Rate_bpm": "Heart rate", "Gender": "Gender",
-          "Smoking": "Smoking", "Exercise_Level": "Exercise level"}
+# =========================================================
+# BASE DIRECTORY
+# =========================================================
 
-PRESETS = {
-    "high": {"age": 55, "gender": "Male", "bmi": 28.0, "bp": 150, "chol": 230, "glu": 120, "hr": 75, "smoke": "Yes", "ex": "Low"},
-    "low": {"age": 30, "gender": "Female", "bmi": 22.0, "bp": 110, "chol": 170, "glu": 90, "hr": 68, "smoke": "No", "ex": "High"},
-    "mid": {"age": 50, "gender": "Male", "bmi": 25.0, "bp": 135, "chol": 205, "glu": 108, "hr": 72, "smoke": "No", "ex": "Moderate"},
+# Folder where this app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+# =========================================================
+# FILE PATHS
+# =========================================================
+
+DATA_FILE = os.path.join(
+    BASE_DIR,
+    "Disease_Prediction_Health_Dataset.xlsx"
+)
+
+MODEL_FILE = os.path.join(
+    BASE_DIR,
+    "disease_model.joblib"
+)
+
+
+# =========================================================
+# FEATURES
+# =========================================================
+
+NUM = [
+    "Age",
+    "BMI",
+    "Blood_Pressure_mmHg",
+    "Cholesterol_mg_dL",
+    "Glucose_mg_dL",
+    "Heart_Rate_bpm"
+]
+
+COLS = [
+    "Age",
+    "Gender",
+    "BMI",
+    "Blood_Pressure_mmHg",
+    "Cholesterol_mg_dL",
+    "Glucose_mg_dL",
+    "Heart_Rate_bpm",
+    "Smoking",
+    "Exercise_Level"
+]
+
+FEATURE_ORDER = NUM + [
+    "Gender",
+    "Smoking",
+    "Exercise_Level"
+]
+
+LABELS = {
+    "Age": "Age",
+    "BMI": "BMI",
+    "Blood_Pressure_mmHg": "Blood pressure",
+    "Cholesterol_mg_dL": "Cholesterol",
+    "Glucose_mg_dL": "Glucose",
+    "Heart_Rate_bpm": "Heart rate",
+    "Gender": "Gender",
+    "Smoking": "Smoking",
+    "Exercise_Level": "Exercise level"
 }
 
 
+# =========================================================
+# PRESETS
+# =========================================================
+
+PRESETS = {
+    "high": {
+        "age": 55,
+        "gender": "Male",
+        "bmi": 28.0,
+        "bp": 150,
+        "chol": 230,
+        "glu": 120,
+        "hr": 75,
+        "smoke": "Yes",
+        "ex": "Low"
+    },
+
+    "low": {
+        "age": 30,
+        "gender": "Female",
+        "bmi": 22.0,
+        "bp": 110,
+        "chol": 170,
+        "glu": 90,
+        "hr": 68,
+        "smoke": "No",
+        "ex": "High"
+    },
+
+    "mid": {
+        "age": 50,
+        "gender": "Male",
+        "bmi": 25.0,
+        "bp": 135,
+        "chol": 205,
+        "glu": 108,
+        "hr": 72,
+        "smoke": "No",
+        "ex": "Moderate"
+    }
+}
+
+
+# =========================================================
+# LOAD MODEL
+# =========================================================
+
 @st.cache_resource
 def load_model():
+
+    # -----------------------------------------------------
+    # Check if saved model exists
+    # -----------------------------------------------------
+
     if os.path.exists(MODEL_FILE):
+
         try:
+
             saved = joblib.load(MODEL_FILE)
-            return saved["model"], saved["threshold"]
-        except Exception:
-            pass
+
+            # If saved file contains model + threshold
+            if isinstance(saved, dict):
+
+                model = saved["model"]
+                threshold = saved.get("threshold", 0.5)
+
+                return model, threshold
+
+            # If saved object is directly the model
+            return saved, 0.5
+
+        except Exception as e:
+
+            st.warning(
+                f"Saved model could not be loaded. "
+                f"Training model from dataset instead. Details: {e}"
+            )
+
+
+    # =====================================================
+    # Train Model If Saved Model Is Not Available
+    # =====================================================
+
     from sklearn.compose import ColumnTransformer
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-    df = pd.read_excel(DATA_FILE, sheet_name="Health_Data")
-    prep = ColumnTransformer([
-        ("num", StandardScaler(), NUM),
-        ("bin", OrdinalEncoder(categories=[["Female", "Male"], ["No", "Yes"]]), ["Gender", "Smoking"]),
-        ("ord", OrdinalEncoder(categories=[["Low", "Moderate", "High"]]), ["Exercise_Level"]),
-    ])
-    model = Pipeline([("prep", prep), ("clf", LogisticRegression(C=0.1, class_weight="balanced", max_iter=2000))])
-    model.fit(df[COLS], (df["Disease"] == "Disease").astype(int))
+
+    # Check dataset
+    if not os.path.exists(DATA_FILE):
+
+        st.error(
+            f"Dataset not found:\n{DATA_FILE}"
+        )
+
+        st.stop()
+
+    df = pd.read_excel(
+        DATA_FILE,
+        sheet_name="Health_Data"
+    )
+
+    prep = ColumnTransformer(
+        [
+            (
+                "num",
+                StandardScaler(),
+                NUM
+            ),
+
+            (
+                "bin",
+                OrdinalEncoder(
+                    categories=[
+                        ["Female", "Male"],
+                        ["No", "Yes"]
+                    ]
+                ),
+                ["Gender", "Smoking"]
+            ),
+
+            (
+                "ord",
+                OrdinalEncoder(
+                    categories=[
+                        ["Low", "Moderate", "High"]
+                    ]
+                ),
+                ["Exercise_Level"]
+            )
+        ]
+    )
+
+    model = Pipeline(
+        [
+            (
+                "prep",
+                prep
+            ),
+
+            (
+                "clf",
+                LogisticRegression(
+                    C=0.1,
+                    class_weight="balanced",
+                    max_iter=2000
+                )
+            )
+        ]
+    )
+
+    model.fit(
+        df[COLS],
+        (df["Disease"] == "Disease").astype(int)
+    )
+
     return model, 0.5
 
 
+# =========================================================
+# LOAD BASELINE
+# =========================================================
+
 @st.cache_resource
 def load_baseline(_model):
-    if os.path.exists(DATA_FILE):
-        df = pd.read_excel(DATA_FILE, sheet_name="Health_Data")
-        return _model.named_steps["prep"].transform(df[COLS]).mean(axis=0)
-    return np.zeros(len(FEATURE_ORDER))
 
+    if os.path.exists(DATA_FILE):
+
+        df = pd.read_excel(
+            DATA_FILE,
+            sheet_name="Health_Data"
+        )
+
+        return _model.named_steps["prep"].transform(
+            df[COLS]
+        ).mean(axis=0)
+
+    return np.zeros(
+        len(FEATURE_ORDER)
+    )
+
+
+# =========================================================
+# PRESET FUNCTION
+# =========================================================
 
 def set_preset(name):
+
     for k, v in PRESETS[name].items():
+
         st.session_state[k] = v
 
 
-st.set_page_config(page_title="Early Disease Risk Prediction", layout="wide")
+# =========================================================
+# PAGE CONFIGURATION
+# =========================================================
+
+st.set_page_config(
+    page_title="Early Disease Risk Prediction",
+    page_icon="🩺",
+    layout="wide"
+)
+
+
+# =========================================================
+# LOAD MODEL AND BASELINE
+# =========================================================
+
 model, threshold = load_model()
+
 baseline = load_baseline(model)
 
-for k, v in PRESETS["mid"].items():
-    st.session_state.setdefault(k, v)
 
-st.title("Early Disease Risk Prediction")
-st.caption("Logistic Regression model trained on a synthetic health dataset. Educational demo, not medical advice.")
+# =========================================================
+# DEFAULT VALUES
+# =========================================================
+
+for k, v in PRESETS["mid"].items():
+
+    st.session_state.setdefault(
+        k,
+        v
+    )
+
+
+# =========================================================
+# TITLE
+# =========================================================
+
+st.title(
+    "🩺 Early Disease Risk Prediction"
+)
+
+st.caption(
+    "Logistic Regression model trained on a synthetic "
+    "health dataset. Educational demo, not medical advice."
+)
+
+
+# =========================================================
+# SIDEBAR
+# =========================================================
 
 with st.sidebar:
-    st.header("Patient details")
-    st.caption("Load an example:")
-    b1, b2, b3 = st.columns(3)
-    b1.button("High risk", on_click=set_preset, args=("high",), use_container_width=True)
-    b2.button("Borderline", on_click=set_preset, args=("mid",), use_container_width=True)
-    b3.button("Low risk", on_click=set_preset, args=("low",), use_container_width=True)
-    age = st.slider("Age (years)", 18, 80, key="age")
-    gender = st.selectbox("Gender", ["Female", "Male"], key="gender")
-    bmi = st.slider("BMI", 15.0, 45.0, step=0.1, key="bmi")
-    bp = st.slider("Systolic blood pressure (mmHg)", 80, 200, key="bp")
-    chol = st.slider("Cholesterol (mg/dL)", 100, 350, key="chol")
-    glu = st.slider("Glucose (mg/dL)", 60, 220, key="glu")
-    hr = st.slider("Heart rate (bpm)", 40, 130, key="hr")
-    smoke = st.selectbox("Smoking", ["No", "Yes"], key="smoke")
-    ex = st.selectbox("Exercise level", ["Low", "Moderate", "High"], key="ex")
 
-row = pd.DataFrame([{"Age": age, "Gender": gender, "BMI": bmi, "Blood_Pressure_mmHg": bp,
-                     "Cholesterol_mg_dL": chol, "Glucose_mg_dL": glu, "Heart_Rate_bpm": hr,
-                     "Smoking": smoke, "Exercise_Level": ex}])
-prob = float(model.predict_proba(row)[0, 1])
+    st.header("Patient details")
+
+    st.caption(
+        "Load an example:"
+    )
+
+    b1, b2, b3 = st.columns(3)
+
+    b1.button(
+        "High risk",
+        on_click=set_preset,
+        args=("high",),
+        use_container_width=True
+    )
+
+    b2.button(
+        "Borderline",
+        on_click=set_preset,
+        args=("mid",),
+        use_container_width=True
+    )
+
+    b3.button(
+        "Low risk",
+        on_click=set_preset,
+        args=("low",),
+        use_container_width=True
+    )
+
+    age = st.slider(
+        "Age (years)",
+        18,
+        80,
+        key="age"
+    )
+
+    gender = st.selectbox(
+        "Gender",
+        ["Female", "Male"],
+        key="gender"
+    )
+
+    bmi = st.slider(
+        "BMI",
+        15.0,
+        45.0,
+        step=0.1,
+        key="bmi"
+    )
+
+    bp = st.slider(
+        "Systolic blood pressure (mmHg)",
+        80,
+        200,
+        key="bp"
+    )
+
+    chol = st.slider(
+        "Cholesterol (mg/dL)",
+        100,
+        350,
+        key="chol"
+    )
+
+    glu = st.slider(
+        "Glucose (mg/dL)",
+        60,
+        220,
+        key="glu"
+    )
+
+    hr = st.slider(
+        "Heart rate (bpm)",
+        40,
+        130,
+        key="hr"
+    )
+
+    smoke = st.selectbox(
+        "Smoking",
+        ["No", "Yes"],
+        key="smoke"
+    )
+
+    ex = st.selectbox(
+        "Exercise level",
+        ["Low", "Moderate", "High"],
+        key="ex"
+    )
+
+
+# =========================================================
+# CREATE INPUT DATA
+# =========================================================
+
+row = pd.DataFrame(
+    [
+        {
+            "Age": age,
+            "Gender": gender,
+            "BMI": bmi,
+            "Blood_Pressure_mmHg": bp,
+            "Cholesterol_mg_dL": chol,
+            "Glucose_mg_dL": glu,
+            "Heart_Rate_bpm": hr,
+            "Smoking": smoke,
+            "Exercise_Level": ex
+        }
+    ]
+)
+
+
+# =========================================================
+# PREDICTION
+# =========================================================
+
+prob = float(
+    model.predict_proba(row)[0, 1]
+)
+
 is_high = prob >= threshold
 
-left, right = st.columns([1, 1.3])
+
+# =========================================================
+# RESULTS
+# =========================================================
+
+left, right = st.columns(
+    [1, 1.3]
+)
+
+
+# =========================================================
+# LEFT: PREDICTION
+# =========================================================
+
 with left:
-    st.subheader("Prediction")
-    st.metric("Estimated risk of disease", f"{prob:.0%}")
-    st.progress(min(max(prob, 0.0), 1.0))
+
+    st.subheader(
+        "Prediction"
+    )
+
+    st.metric(
+        "Estimated risk of disease",
+        f"{prob:.0%}"
+    )
+
+    st.progress(
+        min(
+            max(prob, 0.0),
+            1.0
+        )
+    )
+
     if is_high:
-        st.error("Higher risk: a medical check-up is recommended.")
+
+        st.error(
+            "Higher risk: a medical check-up is recommended."
+        )
+
     else:
-        st.success("Lower risk: keep up regular check-ups.")
-    st.caption(f"Decision threshold: {threshold:.2f}. Risk at or above this value is flagged.")
+
+        st.success(
+            "Lower risk: keep up regular check-ups."
+        )
+
+    st.caption(
+        f"Decision threshold: {threshold:.2f}. "
+        "Risk at or above this value is flagged."
+    )
+
+
+# =========================================================
+# RIGHT: RISK FACTORS
+# =========================================================
 
 with right:
-    st.subheader("What drives this result")
-    contrib = (model.named_steps["prep"].transform(row)[0] - baseline) * model.named_steps["clf"].coef_[0]
-    contrib = pd.Series(contrib, index=[LABELS[f] for f in FEATURE_ORDER]).sort_values()
-    fig, ax = plt.subplots(figsize=(6, 3.4))
-    ax.barh(contrib.index, contrib.values, color=["#b42318" if v > 0 else "#067647" for v in contrib.values])
-    ax.axvline(0, color="black", lw=0.8)
-    ax.set_xlabel("lowers risk  <-   ->  raises risk")
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close(fig)
-    st.caption("Right of zero pushes the risk up, left of zero pushes it down, compared with an average person.")
-    up = contrib[contrib > 0.1].sort_values(ascending=False).head(3)
-    if is_high and len(up):
-        st.write("Main risk-raising factors: " + ", ".join(up.index) + ".")
 
-with st.expander("About the model"):
-    st.write(
-        "Tuned Logistic Regression (C = 0.1, balanced class weights) trained on 3,000 synthetic records. "
-        "On the test set it detected 85% of people with disease (recall 0.85) with a ROC-AUC of 0.912. "
-        "Blood pressure, age and BMI are the strongest risk factors."
+    st.subheader(
+        "What drives this result"
     )
-    st.write("Because the data is synthetic, the results must not be used for real medical decisions.")
+
+    transformed_row = model.named_steps[
+        "prep"
+    ].transform(row)[0]
+
+    coefficients = model.named_steps[
+        "clf"
+    ].coef_[0]
+
+    contrib = (
+        transformed_row - baseline
+    ) * coefficients
+
+    contrib = pd.Series(
+        contrib,
+        index=[
+            LABELS[f]
+            for f in FEATURE_ORDER
+        ]
+    ).sort_values()
+
+
+    fig, ax = plt.subplots(
+        figsize=(6, 3.4)
+    )
+
+    ax.barh(
+        contrib.index,
+        contrib.values
+    )
+
+    ax.axvline(
+        0,
+        color="black",
+        lw=0.8
+    )
+
+    ax.set_xlabel(
+        "lowers risk  <-   ->  raises risk"
+    )
+
+    plt.tight_layout()
+
+    st.pyplot(fig)
+
+    plt.close(fig)
+
+
+    st.caption(
+        "Right of zero pushes the risk up, "
+        "left of zero pushes it down, compared "
+        "with an average person."
+    )
+
+
+    up = (
+        contrib[contrib > 0.1]
+        .sort_values(
+            ascending=False
+        )
+        .head(3)
+    )
+
+    if is_high and len(up):
+
+        st.write(
+            "Main risk-raising factors: "
+            + ", ".join(up.index)
+            + "."
+        )
+
+
+# =========================================================
+# ABOUT MODEL
+# =========================================================
+
+with st.expander(
+    "About the model"
+):
+
+    st.write(
+        "Tuned Logistic Regression (C = 0.1, "
+        "balanced class weights) trained on "
+        "3,000 synthetic records. On the test "
+        "set it detected 85% of people with "
+        "disease (recall 0.85) with a ROC-AUC "
+        "of 0.912. Blood pressure, age and BMI "
+        "are the strongest risk factors."
+    )
+
+    st.write(
+        "Because the data is synthetic, the results "
+        "must not be used for real medical decisions."
+    )
+```
+
+### Ab ek important check
+
+Tumhare GitHub folder mein **ye 3 files same `Disease_prediction` folder ke andar honi chahiye**:
+
+```text
+Disease_prediction/
+│
+├── app.py
+├── disease_model.joblib
+├── Disease_Prediction_Health_Dataset.xlsx
+└── requirements.txt
+```
+
+**Especially:** `disease_model.joblib` ko root folder mein nahi, `Disease_prediction` ke andar hona chahiye, because corrected code usi folder se load karega.
+
+Ab local file save karne ke baad run karo:
+
+```cmd
+git add "Disease_prediction\app.py"
+```
+
+```cmd
+git commit -m "Fix Streamlit file paths"
+```
+
+```cmd
+git push
+```
+
+Phir Streamlit Cloud redeploy hoga.
+
+**Ek aur important improvement maine kiya hai:** agar `disease_model.joblib` dictionary ke form mein saved hai (`{"model": ..., "threshold": ...}`), code usko handle karega; agar direct model object hai, tab bhi handle karega.
