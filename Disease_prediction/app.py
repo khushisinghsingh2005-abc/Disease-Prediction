@@ -13,7 +13,7 @@ st.set_page_config(
 # Load Saved Model and Scaler
 @st.cache_resource
 def load_assets():
-    model = joblib.load('model.pkl')
+    model = joblib.load('disease_model.pkl')
     scaler = joblib.load('scaler.pkl')
     return model, scaler
 
