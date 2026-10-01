@@ -1,4 +1,3 @@
-```python
 import os
 import joblib
 import matplotlib.pyplot as plt
@@ -93,6 +92,7 @@ PRESETS = {
     }
 }
 
+
 @st.cache_resource
 def load_model():
     if os.path.exists(MODEL_FILE):
@@ -100,17 +100,12 @@ def load_model():
             saved = joblib.load(MODEL_FILE)
 
             if isinstance(saved, dict):
-                model = saved["model"]
-                threshold = saved.get("threshold", 0.5)
-                return model, threshold
+                return saved["model"], saved.get("threshold", 0.5)
 
             return saved, 0.5
 
-        except Exception as e:
-            st.warning(
-                f"Saved model could not be loaded. "
-                f"Training model from dataset instead. Details: {e}"
-            )
+        except Exception:
+            pass
 
     from sklearn.compose import ColumnTransformer
     from sklearn.linear_model import LogisticRegression
@@ -126,51 +121,47 @@ def load_model():
         sheet_name="Health_Data"
     )
 
-    prep = ColumnTransformer(
-        [
-            (
-                "num",
-                StandardScaler(),
-                NUM
+    prep = ColumnTransformer([
+        (
+            "num",
+            StandardScaler(),
+            NUM
+        ),
+        (
+            "bin",
+            OrdinalEncoder(
+                categories=[
+                    ["Female", "Male"],
+                    ["No", "Yes"]
+                ]
             ),
-            (
-                "bin",
-                OrdinalEncoder(
-                    categories=[
-                        ["Female", "Male"],
-                        ["No", "Yes"]
-                    ]
-                ),
-                ["Gender", "Smoking"]
+            ["Gender", "Smoking"]
+        ),
+        (
+            "ord",
+            OrdinalEncoder(
+                categories=[
+                    ["Low", "Moderate", "High"]
+                ]
             ),
-            (
-                "ord",
-                OrdinalEncoder(
-                    categories=[
-                        ["Low", "Moderate", "High"]
-                    ]
-                ),
-                ["Exercise_Level"]
-            )
-        ]
-    )
+            ["Exercise_Level"]
+        )
+    ])
 
-    model = Pipeline(
-        [
-            (
-                "prep",
-                prep
-            ),
-            (
-                "clf",
-                LogisticRegression(
-                    C=0.1,
-                    class_weight="balanced",
-                    max_iter=2000
-                )
+    model = Pipeline([
+        (
+            "prep",
+            prep
+        ),
+        (
+            "clf",
+            LogisticRegression(
+                C=0.1,
+                class_weight="balanced",
+                max_iter=2000
             )
-        ]
-    )
+        )
+    ])
 
     model.fit(
         df[COLS],
@@ -178,6 +169,7 @@ def load_model():
     )
 
     return model, 0.5
+
 
 @st.cache_resource
 def load_baseline(_model):
@@ -193,9 +185,11 @@ def load_baseline(_model):
 
     return np.zeros(len(FEATURE_ORDER))
 
+
 def set_preset(name):
     for k, v in PRESETS[name].items():
         st.session_state[k] = v
+
 
 st.set_page_config(
     page_title="Early Disease Risk Prediction",
@@ -217,27 +211,27 @@ st.caption(
 )
 
 with st.sidebar:
-    st.header("Patient details")
+    st.header("👤 Patient Details")
     st.caption("Load an example:")
 
     b1, b2, b3 = st.columns(3)
 
     b1.button(
-        "High risk",
+        "🔴 High",
         on_click=set_preset,
         args=("high",),
         use_container_width=True
     )
 
     b2.button(
-        "Borderline",
+        "🟡 Borderline",
         on_click=set_preset,
         args=("mid",),
         use_container_width=True
     )
 
     b3.button(
-        "Low risk",
+        "🟢 Low",
         on_click=set_preset,
         args=("low",),
         use_container_width=True
@@ -304,21 +298,17 @@ with st.sidebar:
         key="ex"
     )
 
-row = pd.DataFrame(
-    [
-        {
-            "Age": age,
-            "Gender": gender,
-            "BMI": bmi,
-            "Blood_Pressure_mmHg": bp,
-            "Cholesterol_mg_dL": chol,
-            "Glucose_mg_dL": glu,
-            "Heart_Rate_bpm": hr,
-            "Smoking": smoke,
-            "Exercise_Level": ex
-        }
-    ]
-)
+row = pd.DataFrame([{
+    "Age": age,
+    "Gender": gender,
+    "BMI": bmi,
+    "Blood_Pressure_mmHg": bp,
+    "Cholesterol_mg_dL": chol,
+    "Glucose_mg_dL": glu,
+    "Heart_Rate_bpm": hr,
+    "Smoking": smoke,
+    "Exercise_Level": ex
+}])
 
 prob = float(
     model.predict_proba(row)[0, 1]
@@ -329,10 +319,10 @@ is_high = prob >= threshold
 left, right = st.columns([1, 1.3])
 
 with left:
-    st.subheader("Prediction")
+    st.subheader("📊 Prediction")
 
     st.metric(
-        "Estimated risk of disease",
+        "Estimated Risk of Disease",
         f"{prob:.0%}"
     )
 
@@ -342,11 +332,11 @@ with left:
 
     if is_high:
         st.error(
-            "Higher risk: a medical check-up is recommended."
+            "🔴 Higher risk: a medical check-up is recommended."
         )
     else:
         st.success(
-            "Lower risk: keep up regular check-ups."
+            "🟢 Lower risk: keep up regular check-ups."
         )
 
     st.caption(
@@ -355,7 +345,7 @@ with left:
     )
 
 with right:
-    st.subheader("What drives this result")
+    st.subheader("📈 What Drives This Result")
 
     transformed_row = model.named_steps[
         "prep"
@@ -377,75 +367,81 @@ with right:
         ]
     ).sort_values()
 
+    colors = [
+        "#e74c3c" if value > 0 else "#2ecc71"
+        for value in contrib.values
+    ]
+
     fig, ax = plt.subplots(
-        figsize=(6, 3.4)
+        figsize=(7, 4)
     )
 
     ax.barh(
         contrib.index,
-        contrib.values
+        contrib.values,
+        color=colors,
+        edgecolor="black",
+        linewidth=0.5
     )
 
     ax.axvline(
         0,
         color="black",
-        lw=0.8
+        linewidth=1
     )
 
     ax.set_xlabel(
-        "lowers risk  <-   ->  raises risk"
+        "Risk contribution"
+    )
+
+    ax.set_title(
+        "Factors Affecting Disease Risk"
+    )
+
+    ax.grid(
+        axis="x",
+        linestyle="--",
+        alpha=0.25
     )
 
     plt.tight_layout()
 
-    st.pyplot(fig)
+    st.pyplot(
+        fig,
+        use_container_width=True
+    )
 
     plt.close(fig)
 
-    st.caption(
-        "Right of zero pushes the risk up, "
-        "left of zero pushes it down, compared "
-        "with an average person."
+    st.markdown(
+        "🟢 **Green:** lowers estimated risk  |  "
+        "🔴 **Red:** raises estimated risk"
     )
 
     up = (
         contrib[contrib > 0.1]
-        .sort_values(
-            ascending=False
-        )
+        .sort_values(ascending=False)
         .head(3)
     )
 
     if is_high and len(up):
         st.write(
-            "Main risk-raising factors: "
+            "🔴 Main risk-raising factors: "
             + ", ".join(up.index)
             + "."
         )
 
-with st.expander("About the model"):
+with st.expander("ℹ️ About the Model"):
     st.write(
-        "Tuned Logistic Regression (C = 0.1, "
-        "balanced class weights) trained on "
-        "3,000 synthetic records. On the test "
-        "set it detected 85% of people with "
-        "disease (recall 0.85) with a ROC-AUC "
-        "of 0.912. Blood pressure, age and BMI "
-        "are the strongest risk factors."
+        "Tuned Logistic Regression (C = 0.1, balanced "
+        "class weights) trained on 3,000 synthetic records. "
+        "On the test set it detected 85% of people with "
+        "disease (recall 0.85) with a ROC-AUC of 0.912. "
+        "Blood pressure, age and BMI are the strongest "
+        "risk factors."
     )
 
     st.write(
-        "Because the data is synthetic, the results "
-        "must not be used for real medical decisions."
+        "Because the data is synthetic, the results must "
+        "not be used for real medical decisions."
     )
-```
-
-After saving, run:
-
-```cmd
-git add "Disease_prediction\app.py"
-git commit -m "Fix Streamlit file paths"
-git push
-```
-
-Then Streamlit Cloud will redeploy.
