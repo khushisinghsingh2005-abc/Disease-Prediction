@@ -6,17 +6,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# =========================================================
-# BASE DIRECTORY
-# =========================================================
-
-# Folder where this app.py is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-# =========================================================
-# FILE PATHS
-# =========================================================
 
 DATA_FILE = os.path.join(
     BASE_DIR,
@@ -27,11 +17,6 @@ MODEL_FILE = os.path.join(
     BASE_DIR,
     "disease_model.joblib"
 )
-
-
-# =========================================================
-# FEATURES
-# =========================================================
 
 NUM = [
     "Age",
@@ -72,11 +57,6 @@ LABELS = {
     "Exercise_Level": "Exercise level"
 }
 
-
-# =========================================================
-# PRESETS
-# =========================================================
-
 PRESETS = {
     "high": {
         "age": 55,
@@ -89,7 +69,6 @@ PRESETS = {
         "smoke": "Yes",
         "ex": "Low"
     },
-
     "low": {
         "age": 30,
         "gender": "Female",
@@ -101,7 +80,6 @@ PRESETS = {
         "smoke": "No",
         "ex": "High"
     },
-
     "mid": {
         "age": 50,
         "gender": "Male",
@@ -115,59 +93,32 @@ PRESETS = {
     }
 }
 
-
-# =========================================================
-# LOAD MODEL
-# =========================================================
-
 @st.cache_resource
 def load_model():
-
-    # -----------------------------------------------------
-    # Check if saved model exists
-    # -----------------------------------------------------
-
     if os.path.exists(MODEL_FILE):
-
         try:
-
             saved = joblib.load(MODEL_FILE)
 
-            # If saved file contains model + threshold
             if isinstance(saved, dict):
-
                 model = saved["model"]
                 threshold = saved.get("threshold", 0.5)
-
                 return model, threshold
 
-            # If saved object is directly the model
             return saved, 0.5
 
         except Exception as e:
-
             st.warning(
                 f"Saved model could not be loaded. "
                 f"Training model from dataset instead. Details: {e}"
             )
-
-
-    # =====================================================
-    # Train Model If Saved Model Is Not Available
-    # =====================================================
 
     from sklearn.compose import ColumnTransformer
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-    # Check dataset
     if not os.path.exists(DATA_FILE):
-
-        st.error(
-            f"Dataset not found:\n{DATA_FILE}"
-        )
-
+        st.error(f"Dataset not found: {DATA_FILE}")
         st.stop()
 
     df = pd.read_excel(
@@ -182,7 +133,6 @@ def load_model():
                 StandardScaler(),
                 NUM
             ),
-
             (
                 "bin",
                 OrdinalEncoder(
@@ -193,7 +143,6 @@ def load_model():
                 ),
                 ["Gender", "Smoking"]
             ),
-
             (
                 "ord",
                 OrdinalEncoder(
@@ -212,7 +161,6 @@ def load_model():
                 "prep",
                 prep
             ),
-
             (
                 "clf",
                 LogisticRegression(
@@ -231,16 +179,9 @@ def load_model():
 
     return model, 0.5
 
-
-# =========================================================
-# LOAD BASELINE
-# =========================================================
-
 @st.cache_resource
 def load_baseline(_model):
-
     if os.path.exists(DATA_FILE):
-
         df = pd.read_excel(
             DATA_FILE,
             sheet_name="Health_Data"
@@ -250,25 +191,11 @@ def load_baseline(_model):
             df[COLS]
         ).mean(axis=0)
 
-    return np.zeros(
-        len(FEATURE_ORDER)
-    )
-
-
-# =========================================================
-# PRESET FUNCTION
-# =========================================================
+    return np.zeros(len(FEATURE_ORDER))
 
 def set_preset(name):
-
     for k, v in PRESETS[name].items():
-
         st.session_state[k] = v
-
-
-# =========================================================
-# PAGE CONFIGURATION
-# =========================================================
 
 st.set_page_config(
     page_title="Early Disease Risk Prediction",
@@ -276,53 +203,22 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# =========================================================
-# LOAD MODEL AND BASELINE
-# =========================================================
-
 model, threshold = load_model()
-
 baseline = load_baseline(model)
 
-
-# =========================================================
-# DEFAULT VALUES
-# =========================================================
-
 for k, v in PRESETS["mid"].items():
+    st.session_state.setdefault(k, v)
 
-    st.session_state.setdefault(
-        k,
-        v
-    )
-
-
-# =========================================================
-# TITLE
-# =========================================================
-
-st.title(
-    "🩺 Early Disease Risk Prediction"
-)
+st.title("🩺 Early Disease Risk Prediction")
 
 st.caption(
     "Logistic Regression model trained on a synthetic "
     "health dataset. Educational demo, not medical advice."
 )
 
-
-# =========================================================
-# SIDEBAR
-# =========================================================
-
 with st.sidebar:
-
     st.header("Patient details")
-
-    st.caption(
-        "Load an example:"
-    )
+    st.caption("Load an example:")
 
     b1, b2, b3 = st.columns(3)
 
@@ -408,11 +304,6 @@ with st.sidebar:
         key="ex"
     )
 
-
-# =========================================================
-# CREATE INPUT DATA
-# =========================================================
-
 row = pd.DataFrame(
     [
         {
@@ -429,36 +320,16 @@ row = pd.DataFrame(
     ]
 )
 
-
-# =========================================================
-# PREDICTION
-# =========================================================
-
 prob = float(
     model.predict_proba(row)[0, 1]
 )
 
 is_high = prob >= threshold
 
-
-# =========================================================
-# RESULTS
-# =========================================================
-
-left, right = st.columns(
-    [1, 1.3]
-)
-
-
-# =========================================================
-# LEFT: PREDICTION
-# =========================================================
+left, right = st.columns([1, 1.3])
 
 with left:
-
-    st.subheader(
-        "Prediction"
-    )
+    st.subheader("Prediction")
 
     st.metric(
         "Estimated risk of disease",
@@ -466,20 +337,14 @@ with left:
     )
 
     st.progress(
-        min(
-            max(prob, 0.0),
-            1.0
-        )
+        min(max(prob, 0.0), 1.0)
     )
 
     if is_high:
-
         st.error(
             "Higher risk: a medical check-up is recommended."
         )
-
     else:
-
         st.success(
             "Lower risk: keep up regular check-ups."
         )
@@ -489,16 +354,8 @@ with left:
         "Risk at or above this value is flagged."
     )
 
-
-# =========================================================
-# RIGHT: RISK FACTORS
-# =========================================================
-
 with right:
-
-    st.subheader(
-        "What drives this result"
-    )
+    st.subheader("What drives this result")
 
     transformed_row = model.named_steps[
         "prep"
@@ -519,7 +376,6 @@ with right:
             for f in FEATURE_ORDER
         ]
     ).sort_values()
-
 
     fig, ax = plt.subplots(
         figsize=(6, 3.4)
@@ -546,13 +402,11 @@ with right:
 
     plt.close(fig)
 
-
     st.caption(
         "Right of zero pushes the risk up, "
         "left of zero pushes it down, compared "
         "with an average person."
     )
-
 
     up = (
         contrib[contrib > 0.1]
@@ -563,22 +417,13 @@ with right:
     )
 
     if is_high and len(up):
-
         st.write(
             "Main risk-raising factors: "
             + ", ".join(up.index)
             + "."
         )
 
-
-# =========================================================
-# ABOUT MODEL
-# =========================================================
-
-with st.expander(
-    "About the model"
-):
-
+with st.expander("About the model"):
     st.write(
         "Tuned Logistic Regression (C = 0.1, "
         "balanced class weights) trained on "
@@ -595,35 +440,12 @@ with st.expander(
     )
 ```
 
-### Ab ek important check
-
-Tumhare GitHub folder mein **ye 3 files same `Disease_prediction` folder ke andar honi chahiye**:
-
-```text
-Disease_prediction/
-│
-├── app.py
-├── disease_model.joblib
-├── Disease_Prediction_Health_Dataset.xlsx
-└── requirements.txt
-```
-
-**Especially:** `disease_model.joblib` ko root folder mein nahi, `Disease_prediction` ke andar hona chahiye, because corrected code usi folder se load karega.
-
-Ab local file save karne ke baad run karo:
+After saving, run:
 
 ```cmd
 git add "Disease_prediction\app.py"
-```
-
-```cmd
 git commit -m "Fix Streamlit file paths"
-```
-
-```cmd
 git push
 ```
 
-Phir Streamlit Cloud redeploy hoga.
-
-**Ek aur important improvement maine kiya hai:** agar `disease_model.joblib` dictionary ke form mein saved hai (`{"model": ..., "threshold": ...}`), code usko handle karega; agar direct model object hai, tab bhi handle karega.
+Then Streamlit Cloud will redeploy.
